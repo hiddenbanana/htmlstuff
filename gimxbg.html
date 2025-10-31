@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Random Nightclub Background + Center Logo</title>
+  <style>
+    /* Full screen, responsive background video */
+    html,body { height:100%; margin:0; }
+    .video-wrap {
+      position:fixed;
+      inset:0;
+      overflow:hidden;
+      z-index:-1; /* behind content */
+      background: #000;
+    }
+    video#bgVideo {
+      position:absolute;
+      top:50%;
+      left:50%;
+      transform:translate(-50%,-50%);
+      min-width:100%;
+      min-height:100%;
+      width:auto;
+      height:auto;
+      object-fit:cover;
+      filter: brightness(0.85) saturate(1.05);
+    }
+
+    /* Centered logo overlay */
+    .overlay {
+      position:fixed;
+      inset:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      pointer-events:none; /* click-through */
+    }
+    .logo {
+      max-width:40vmin;
+      max-height:40vmin;
+      width:auto;
+      height:auto;
+      pointer-events:auto; /* allow clicks if you want to wrap in a link later */
+      user-select:none;
+      image-rendering: -webkit-optimize-contrast;
+      filter: drop-shadow(0 6px 22px rgba(0,0,0,0.6));
+    }
+
+    /* Optional small controls in corner (unobtrusive) */
+    .controls {
+      position:fixed;
+      right:12px;
+      bottom:12px;
+      z-index:20;
+      display:flex;
+      gap:8px;
+      align-items:center;
+      background:rgba(0,0,0,0.35);
+      padding:8px;
+      border-radius:8px;
+      color:#fff;
+      font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial;
+      font-size:13px;
+    }
+    .controls button {
+      background:transparent;
+      border:1px solid rgba(255,255,255,0.12);
+      color:#fff;
+      padding:6px 8px;
+      border-radius:6px;
+      cursor:pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="video-wrap" aria-hidden="true">
+    <video id="bgVideo" playsinline muted autoplay loop></video>
+  </div>
+
+  <div class="overlay" role="img" aria-label="Centered logo">
+    <!-- your GitHub-hosted logo (raw URL) -->
+    <img class="logo" id="centerLogo"
+      src="https://raw.githubusercontent.com/hiddenbanana/htmlstuff/main/Asset%201.png"
+      alt="Logo">
+  </div>
+
+  <div class="controls" id="controls">
+    <button id="nextBtn" title="Next random video">Next</button>
+    <button id="pauseBtn" title="Pause / Play">Pause</button>
+    <span id="attribution" style="opacity:0.85; margin-left:8px; font-size:12px;"></span>
+  </div>
+
+<script>
+/*
+  How this works:
+  1) If you set PEXELS_API_KEY below, the page will call the Pexels Videos Search API:
+     GET https://api.pexels.com/videos/search?query=nightclub&per_page=15
+     The API returns video_files[] with direct mp4 links you can use.
+  2) If you do not provide an API key (or the API fails due to CORS), the fallbackVideos array is used.
+  3) We pick a random file (preferring highest resolution) and set it as the <video> src.
+*/
+
+/* ----- CONFIG ----- */
+/* Replace with your Pexels API key if you have one. Leave empty to use fallback list. */
+const PEXELS_API_KEY = ""; // <-- put your key here (e.g. "563492...") or leave "" to use fallback
+
+/* Pexels search query & per_page */
+const QUERY = "nightclub";
+const PER_PAGE = 12;
+
+/* Fallback direct mp4 URLs (use these if you don't want to use the API).
+   If you want better results, open a Pexels video page and copy the "Free download" -> right-click -> copy link,
+   or use the Pexels API to fetch video_files[].link programmatically. */
+const fallbackVideos = [
+  // Example of a sample public mp4 (these may expire if Pexels rotates tokens) — best to put your own
+  "https://player.vimeo.com/external/342571552.hd.mp4?s=6aa6f164de3812abadff3dde86d19f7a074a8a66&profile_id=175&oauth2_token_id=57447761",
+  "https://player.vimeo.com/external/291648067.hd.mp4?s=1210fac9d80f9b74b4a334c4fca327cde08886b2&oauth2_token_id=57447761",
+  // Add more direct mp4 URLs here if you have them
+];
+
+/* ----- Implementation ----- */
+const videoEl = document.getElementById('bgVideo');
+const nextBtn = document.getElementById('nextBtn');
+const pauseBtn = document.getElementById('pauseBtn');
+const attribution = document.getElementById('attribution');
+
+let currentIndex = -1;
+let currentList = [];
+
+/* choose the best-quality mp4 from a Pexels video_files[] entry */
+function chooseBestVideoFile(files) {
+  if (!files || !files.length) return null;
+  // prefer hd mp4, otherwise largest width
+  const mp4s = files.filter(f => f.file_type && f.file_type.includes('mp4'));
+  if (!mp4s.length) return files[0].link || null;
+  // sort: prefer quality 'hd' then bigger width
+  mp4s.sort((a,b) => {
+    const qa = (a.quality === 'hd') ? 1 : 0;
+    const qb = (b.quality === 'hd') ? 1 : 0;
+    if (qa !== qb) return qb - qa; // hd first
+    const wa = a.width || 0, wb = b.width || 0;
+    return wb - wa;
+  });
+  return mp4s[0].link || null;
+}
+
+/* use Pexels API to fetch video list */
+async function fetchFromPexels() {
+  if (!PEXELS_API_KEY) throw new Error('No API key configured');
+  const url = `https://api.pexels.com/videos/search?query=${encodeURIComponent(QUERY)}&per_page=${PER_PAGE}`;
+  const res = await fetch(url, {
+    headers: { Authorization: PEXELS_API_KEY }
+  });
+  if (!res.ok) {
+    throw new Error('Pexels API error: ' + res.status);
+  }
+  const j = await res.json();
+  // each item has video_files[] with direct mp4s
+  const list = j?.videos?.map(v => ({
+    id: v.id,
+    url: v.url,
+    files: v.video_files || [],
+    user: v.user?.name || ''
+  })) || [];
+  return list;
+}
+
+/* Build currentList from Pexels results (extract chosen mp4 link) */
+function buildListFromPexels(items) {
+  const out = [];
+  for (const it of items) {
+    const link = chooseBestVideoFile(it.files);
+    if (link) out.push({
+      src: link,
+      page: it.url,
+      author: it.user || ''
+    });
+  }
+  return out;
+}
+
+/* Build fallback list */
+function buildFallbackList() {
+  return fallbackVideos.map(u => ({ src: u, page: '', author: '' }));
+}
+
+/* Pick random index not equal to currentIndex (if possible) */
+function pickRandomIndex(list) {
+  if (!list.length) return -1;
+  if (list.length === 1) return 0;
+  let idx;
+  do {
+    idx = Math.floor(Math.random() * list.length);
+  } while (idx === currentIndex);
+  return idx;
+}
+
+/* Load and play a random video */
+async function playRandom() {
+  if (!currentList.length) return;
+  const idx = pickRandomIndex(currentList);
+  if (idx === -1) return;
+  currentIndex = idx;
+  const info = currentList[idx];
+  // set source
+  videoEl.pause();
+  // Use a blob fetch to avoid CORS issues sometimes? browsers usually allow direct MP4 src from CDN.
+  videoEl.src = info.src;
+  videoEl.load();
+  try { await videoEl.play(); } catch(e) { /* autoplay blocked? it's muted so usually ok */ }
+  attribution.textContent = info.author ? `Video: ${info.author}` : '';
+}
+
+/* Initialize: try API, otherwise fallback */
+async function init() {
+  try {
+    if (PEXELS_API_KEY) {
+      const items = await fetchFromPexels();
+      const built = buildListFromPexels(items);
+      if (built.length) {
+        currentList = built;
+      } else {
+        currentList = buildFallbackList();
+      }
+    } else {
+      currentList = buildFallbackList();
+    }
+  } catch (err) {
+    console.warn('Pexels API failed, using fallback. Error:', err);
+    currentList = buildFallbackList();
+  }
+
+  if (!currentList.length) {
+    console.error('No video sources available.');
+    return;
+  }
+  // First play
+  await playRandom();
+}
+
+/* Controls */
+nextBtn.addEventListener('click', () => playRandom());
+pauseBtn.addEventListener('click', () => {
+  if (videoEl.paused) {
+    videoEl.play();
+    pauseBtn.textContent = 'Pause';
+  } else {
+    videoEl.pause();
+    pauseBtn.textContent = 'Play';
+  }
+});
+
+/* if the video ends (not looping), pick next (but we set loop by default) */
+videoEl.addEventListener('ended', () => playRandom());
+
+/* Kick off */
+init();
+</script>
+
+<!--
+  Notes & tips:
+  - To use the Pexels API: sign up at https://www.pexels.com and get an API key (see "Videos API / documentation").
+    Add the key to the PEXELS_API_KEY constant above. Example: Authorization: YOUR_API_KEY. :contentReference[oaicite:1]{index=1}
+  - The Pexels API returns direct MP4 links in the video_files array (often hosted via player.vimeo.com). The script chooses the best mp4 automatically.
+  - If you want the logo to be clickable, wrap the <img> in an <a href="...">.
+-->
+
+</body>
+</html>
