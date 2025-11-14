@@ -22,9 +22,10 @@
       pointer-events: none;
     }
     #logo {
-      max-width: 300px;
+      max-width: 600px;   /* ← CHANGED: was 300px → now 2x bigger */
       width: 100%;
       height: auto;
+      filter: drop-shadow(0 0 12px rgba(0,0,0,0.7)); /* optional: adds glow */
     }
     #new-video {
       position: fixed;
@@ -54,14 +55,13 @@
 
   <script>
     const API_KEY = 'ZF8qy3fNZlH3TCELlBKW9uK3fnFDZsvk6ZozOgXiGvIARDWd6q1EL4ha';
-    const SEARCH_QUERY = 'glitch';  // Updated to "glitch" for glitchy videos
+    const SEARCH_QUERY = 'glitch';
     const VIDEO_ELEMENT = document.getElementById('bg-video');
     const NEW_BTN = document.getElementById('new-video');
 
-    let videoCache = []; // Store fetched videos to avoid repeats
-    let usedVideos = new Set(); // Track used video IDs
+    let videoCache = [];
+    let usedVideos = new Set();
 
-    // Fetch a batch of videos (30 at a time)
     async function fetchVideoBatch() {
       try {
         const resp = await fetch(
@@ -77,11 +77,9 @@
       }
     }
 
-    // Get a random unused video
     function getRandomVideo() {
       const available = videoCache.filter(v => !usedVideos.has(v.id));
       if (available.length === 0) {
-        // Refill cache if all used
         usedVideos.clear();
         return getRandomVideo();
       }
@@ -90,7 +88,6 @@
       return vid;
     }
 
-    // Load and play a new random video
     async function loadNextVideo() {
       if (videoCache.length < 5) {
         const newBatch = await fetchVideoBatch();
@@ -103,19 +100,14 @@
         return;
       }
 
-      const file = vid.video_files.slice(-1)[0].link; // highest quality
+      const file = vid.video_files.slice(-1)[0].link;
       VIDEO_ELEMENT.src = file;
       VIDEO_ELEMENT.load();
       VIDEO_ELEMENT.play().catch(() => {});
     }
 
-    // Auto-cycle: load next when current ends
     VIDEO_ELEMENT.addEventListener('ended', loadNextVideo);
-
-    // Button: skip to next
     NEW_BTN.addEventListener('click', loadNextVideo);
-
-    // Start the cycle
     loadNextVideo();
   </script>
 
