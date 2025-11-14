@@ -1,214 +1,126 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Random Nightclub Background — Debug Friendly</title>
+  <meta charset="UTF-8">
+  <title>Glitch Video Background + Centered Logo (Auto-Cycle)</title>
   <style>
-    html,body { height:100%; margin:0; background:#000; font-family:system-ui,Segoe UI,Roboto,Arial; color:#fff; }
-    .video-wrap { position:fixed; inset:0; overflow:hidden; z-index:0; background:#000; }
-    video#bgVideo {
-      position:absolute; top:50%; left:50%;
-      transform:translate(-50%,-50%);
-      min-width:100%; min-height:100%;
-      width:auto; height:auto;
-      object-fit:cover;
-      filter: brightness(0.85) saturate(1.05);
+    body, html { margin:0; padding:0; height:100%; overflow:hidden; }
+    #bg-video {
+      position: fixed;
+      top: 50%; left: 50%;
+      min-width: 100%; min-height: 100%;
+      width: auto; height: auto;
+      transform: translate(-50%, -50%);
+      z-index: -1;
+      object-fit: cover;
     }
-    .overlay { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:5; pointer-events:none; }
-    .logo { max-width:40vmin; max-height:40vmin; pointer-events:auto; user-select:none; filter:drop-shadow(0 6px 22px rgba(0,0,0,0.6)); }
-    .controls { position:fixed; right:12px; bottom:12px; z-index:10; display:flex; gap:8px; align-items:center;
-                background:rgba(0,0,0,0.45); padding:8px; border-radius:8px; font-size:13px; }
-    .controls button { background:transparent; border:1px solid rgba(255,255,255,0.12); color:#fff; padding:6px 8px; border-radius:6px; cursor:pointer; }
-    .status { position:fixed; left:12px; bottom:12px; z-index:10; background:rgba(0,0,0,0.45); padding:8px; border-radius:8px; max-width:45vw; font-size:13px; }
-    .error { color:#ffb3b3; }
-    a.small { color:#9fd; text-decoration:underline; }
+    #logo-container {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 1;
+      pointer-events: none;
+    }
+    #logo {
+      max-width: 300px;
+      width: 100%;
+      height: auto;
+    }
+    #new-video {
+      position: fixed;
+      bottom: 20px; right: 20px;
+      z-index: 2;
+      padding: 10px 18px;
+      font-family: sans-serif;
+      font-weight: bold;
+      background: rgba(0,0,0,0.5);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    #new-video:hover { background: rgba(0,0,0,0.7); }
   </style>
 </head>
 <body>
-  <div class="video-wrap" aria-hidden="true">
-    <video id="bgVideo" playsinline muted autoplay loop crossorigin="anonymous"></video>
+
+  <video id="bg-video" autoplay muted playsinline></video>
+
+  <div id="logo-container">
+    <img id="logo" src="https://github.com/hiddenbanana/htmlstuff/blob/main/Asset%201.png?raw=true" alt="Logo">
   </div>
 
-  <div class="overlay" role="img" aria-label="Centered logo">
-    <img id="centerLogo" class="logo"
-      src="https://raw.githubusercontent.com/hiddenbanana/htmlstuff/main/Asset%201.png"
-      alt="Logo">
-  </div>
+  <button id="new-video">Next Video</button>
 
-  <div class="controls" id="controls">
-    <button id="nextBtn" title="Next random video">Next</button>
-    <button id="pauseBtn" title="Pause / Play">Pause</button>
-    <button id="infoBtn" title="Show last error">Last error</button>
-  </div>
+  <script>
+    const API_KEY = 'ZF8qy3fNZlH3TCELlBKW9uK3fnFDZsvk6ZozOgXiGvIARDWd6q1EL4ha';
+    const SEARCH_QUERY = 'glitch';  // Updated to "glitch" for glitchy videos
+    const VIDEO_ELEMENT = document.getElementById('bg-video');
+    const NEW_BTN = document.getElementById('new-video');
 
-  <div class="status" id="status">Initializing… (open DevTools → Console to see more)</div>
+    let videoCache = []; // Store fetched videos to avoid repeats
+    let usedVideos = new Set(); // Track used video IDs
 
-<script>
-/* --------- CONFIG --------- */
-/* If you have a Pexels API key you can implement a fetch-from-API flow.
-   For now this example uses fallbackVideos. Replace these with mp4 links you host if needed. */
-const fallbackVideos = [
-  // NOTE: these example links may or may not remain available — if you see network errors replace with your own hosted mp4s.
-  "https://vod-progressive.akamaized.net/exp=1700000000~acl=%2Fvimeo-prod-skyfire-std-us%2F01%2F1234%2F0%2F123456789%2Fvideo.mp4~hmac=0000000000000000000000000000000000000000000000000000000000000000/vimeo-prod-skyfire-std-us/01/1234/0/123456789/video.mp4",
-  "https://vod-progressive.akamaized.net/exp=1700000000~acl=%2Fvimeo-prod-skyfire-std-us%2F02%2F5678%2F0%2F987654321%2Fvideo.mp4~hmac=0000000000000000000000000000000000000000000000000000000000000000/vimeo-prod-skyfire-std-us/02/5678/0/987654321/video.mp4"
-];
+    // Fetch a batch of videos (30 at a time)
+    async function fetchVideoBatch() {
+      try {
+        const resp = await fetch(
+          `https://api.pexels.com/videos/search?query=${SEARCH_QUERY}&per_page=30`,
+          { headers: { Authorization: API_KEY } }
+        );
+        if (!resp.ok) throw new Error(`Pexels error: ${resp.status}`);
+        const data = await resp.json();
+        return data.videos || [];
+      } catch (e) {
+        console.error(e);
+        return [];
+      }
+    }
 
-const videoEl = document.getElementById('bgVideo');
-const statusEl = document.getElementById('status');
-const nextBtn = document.getElementById('nextBtn');
-const pauseBtn = document.getElementById('pauseBtn');
-const infoBtn = document.getElementById('infoBtn');
+    // Get a random unused video
+    function getRandomVideo() {
+      const available = videoCache.filter(v => !usedVideos.has(v.id));
+      if (available.length === 0) {
+        // Refill cache if all used
+        usedVideos.clear();
+        return getRandomVideo();
+      }
+      const vid = available[Math.floor(Math.random() * available.length)];
+      usedVideos.add(vid.id);
+      return vid;
+    }
 
-let list = [];
-let idx = -1;
-let lastError = null;
+    // Load and play a new random video
+    async function loadNextVideo() {
+      if (videoCache.length < 5) {
+        const newBatch = await fetchVideoBatch();
+        videoCache.push(...newBatch);
+      }
 
-/* Utility: show message on page + console */
-function setStatus(msg, isError=false) {
-  statusEl.innerHTML = msg;
-  if (isError) statusEl.classList.add('error'); else statusEl.classList.remove('error');
-  console.log('[BGVIDEO]', msg);
-}
+      const vid = getRandomVideo();
+      if (!vid) {
+        console.error("No video available");
+        return;
+      }
 
-/* Populate list (in real use replace with Pexels-derived links) */
-function buildList() {
-  list = fallbackVideos.map(u => ({ src: u }));
-  if (!list.length) {
-    setStatus('No video URLs available. Replace fallbackVideos with valid mp4 links.', true);
-  } else {
-    setStatus(`Loaded ${list.length} fallback video(s). Trying to play…`);
-  }
-}
+      const file = vid.video_files.slice(-1)[0].link; // highest quality
+      VIDEO_ELEMENT.src = file;
+      VIDEO_ELEMENT.load();
+      VIDEO_ELEMENT.play().catch(() => {});
+    }
 
-/* Choose a random index not equal to current idx */
-function pickRandom() {
-  if (!list.length) return -1;
-  if (list.length === 1) return 0;
-  let i;
-  do { i = Math.floor(Math.random()*list.length); } while (i === idx);
-  return i;
-}
+    // Auto-cycle: load next when current ends
+    VIDEO_ELEMENT.addEventListener('ended', loadNextVideo);
 
-/* Try to play a particular source; on error try next */
-function tryPlayIndex(i) {
-  if (i < 0 || i >= list.length) {
-    setStatus('Index out of range.', true);
-    return;
-  }
-  idx = i;
-  const src = list[i].src;
-  setStatus(`Attempting to play source ${i+1}/${list.length}: ${src}`);
-  console.log('Setting video.src =', src);
-  // remove existing src/sources to start clean
-  videoEl.removeAttribute('src');
-  while (videoEl.firstChild) videoEl.removeChild(videoEl.firstChild);
-  // Create source element
-  const s = document.createElement('source');
-  s.src = src;
-  s.type = 'video/mp4';
-  videoEl.appendChild(s);
+    // Button: skip to next
+    NEW_BTN.addEventListener('click', loadNextVideo);
 
-  // Force re-load
-  videoEl.load();
+    // Start the cycle
+    loadNextVideo();
+  </script>
 
-  // attempt play; catch Promise rejection
-  const p = videoEl.play();
-  if (p && p instanceof Promise) {
-    p.then(() => {
-      setStatus(`Playing video ${i+1}/${list.length}`);
-      lastError = null;
-      pauseBtn.textContent = 'Pause';
-    }).catch(err => {
-      console.warn('Autoplay/play rejected:', err);
-      lastError = err && err.message ? err.message : String(err);
-      setStatus('Play was blocked or failed: ' + lastError + ' — trying next video...', true);
-      // Try next after short delay
-      setTimeout(() => tryNext(), 700);
-    });
-  } else {
-    // non-promise play (old browsers)
-    setStatus('Play invoked (non-promise).');
-  }
-}
-
-/* Try next source (random) */
-function tryNext() {
-  const next = pickRandom();
-  if (next === -1) { setStatus('No videos to play.', true); return; }
-  tryPlayIndex(next);
-}
-
-/* Event handlers to detect loading/network errors */
-videoEl.addEventListener('error', (ev) => {
-  const code = videoEl.error && videoEl.error.code ? videoEl.error.code : 'unknown';
-  const details = `HTMLMediaElement error code ${code}`;
-  console.error('Video element error:', ev, details);
-  lastError = details;
-  setStatus('Video element error: ' + details + ' — trying next source...', true);
-  // try next after a tiny delay to avoid rapid looping
-  setTimeout(() => tryNext(), 600);
-});
-
-videoEl.addEventListener('stalled', () => {
-  console.warn('Video stalled (network?)');
-  setStatus('Video stalled (network?). Trying next...', true);
-  setTimeout(() => tryNext(), 1000);
-});
-videoEl.addEventListener('suspend', () => console.log('Video suspend event'));
-videoEl.addEventListener('loadedmetadata', () => console.log('loadedmetadata — video ready'));
-videoEl.addEventListener('playing', () => console.log('playing'));
-videoEl.addEventListener('pause', () => console.log('paused'));
-
-/* Controls */
-nextBtn.addEventListener('click', () => tryNext());
-pauseBtn.addEventListener('click', () => {
-  if (videoEl.paused) {
-    videoEl.play().catch(err => {
-      console.warn('Play failed:', err);
-      lastError = err && err.message ? err.message : String(err);
-      setStatus('Play failed: ' + lastError, true);
-    });
-    pauseBtn.textContent = 'Pause';
-  } else {
-    videoEl.pause();
-    pauseBtn.textContent = 'Play';
-  }
-});
-infoBtn.addEventListener('click', () => {
-  alert('Last error (console for more):\n\n' + (lastError || 'no error recorded'));
-});
-
-/* Init flow */
-(function init(){
-  buildList();
-  if (!list.length) return;
-  // Important: if you open file:// URLs, fetch/CORS/Autoplay issues are likelier.
-  // Serve over HTTP: e.g. from directory run: python -m http.server
-  setStatus('Ready. If nothing plays, open DevTools (F12) → Console / Network for errors. Serving over HTTP recommended.');
-  // small delay to let browser decide autoplay policies
-  setTimeout(() => tryNext(), 300);
-})();
-</script>
-
-<!-- Troubleshooting notes (visible in page) -->
-<!--
-  If it's still not working, check these common causes:
-
-  1) Open DevTools (F12) → Console and Network. Look for:
-     - CORS / Access-Control-Allow-Origin errors (these mean the host blocks cross-origin video hotlinking).
-     - 403 / 404 network errors (URL wrong/expired).
-     - Autoplay blocked: modern browsers require muted + user gesture. This page uses muted so autoplay usually works.
-  2) If you opened the file with file://, run a simple server instead:
-     - In terminal: python -m http.server
-     - Then open http://localhost:8000/index.html
-  3) If the fallback mp4s fail, replace fallbackVideos with mp4s you host (same-origin) or Pexels `video_files[].link` values you retrieved server-side.
-  4) If you want to use the Pexels API:
-     - You must fetch the API server-side (to keep your API key secret) or expose it but beware limits.
-     - The API returns `video_files[].link` which you can use as video src if the host allows hotlinking.
-  5) GitHub raw images: your logo URL should work (raw.githubusercontent.com). If it doesn't display, check console for 404.
-
-  If you paste the DevTools console output here I’ll read it and give exact fixes.
--->
+  <noscript>
+    <p>JavaScript is required to load videos.</p>
+  </noscript>
 </body>
 </html>
