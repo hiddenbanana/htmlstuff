@@ -2,9 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Glitch Video + Modal Controls</title>
+  <title>Glitch Video + Modal (Font Awesome)</title>
+
+  <!-- FONT AWESOME -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
   <style>
-    body, html { margin:0; padding:0; height:100%; overflow:hidden; font-family: sans-serif; }
+    body, html { margin:0; padding:0; height:100%; overflow:hidden; font-family: 'Segoe UI', sans-serif; }
     #bg-video {
       position: fixed; top: 50%; left: 50%; min-width: 100%; min-height: 100%;
       width: auto; height: auto; transform: translate(-50%, -50%);
@@ -16,38 +20,55 @@
     }
     #logo {
       max-width: 600px; width: 100%; height: auto;
-      filter: drop-shadow(0 0 12px rgba(0,0,0,0.7));
+      filter: drop-shadow(0 0 14px rgba(0,0,0,0.8));
     }
 
     /* Modal */
     #modal {
       position: fixed; top: 20px; left: 20px; z-index: 10;
-      background: rgba(0,0,0,0.8); padding: 16px; border-radius: 12px;
-      display: flex; gap: 10px; align-items: center; color: white;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-      transition: transform 0.3s ease, opacity 0.3s ease;
+      background: rgba(0,0,0,0.85); padding: 16px 20px; border-radius: 14px;
+      display: flex; gap: 12px; align-items: center; color: white;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6); backdrop-filter: blur(10px);
+      transition: all 0.3s ease;
     }
-    #modal.hidden { transform: translateY(-150%); opacity: 0; pointer-events: none; }
+    #modal.hidden { transform: translateY(-120%); opacity: 0; pointer-events: none; }
+
     #search-input {
-      padding: 10px; font-size: 16px; border: 2px solid #fff; border-radius: 6px;
-      background: rgba(255,255,255,0.1); color: white; width: 200px;
+      padding: 10px 12px 10px 36px; font-size: 16px; border: 2px solid #fff;
+      border-radius: 8px; background: rgba(255,255,255,0.1); color: white;
+      width: 220px; position: relative;
     }
+    #search-input::placeholder { color: rgba(255,255,255,0.7); }
+    #search-input:focus { outline: none; border-color: #00ffcc; }
+
+    /* Icon inside input */
+    #search-container { position: relative; display: inline-block; }
+    #search-container i {
+      position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+      color: #aaa; font-size: 18px; pointer-events: none;
+    }
+
     #search-btn, #next-btn {
-      padding: 10px 16px; background: rgba(255,255,255,0.2); color: white;
-      border: 2px solid #fff; border-radius: 6px; font-weight: bold; cursor: pointer;
+      padding: 10px 16px; background: rgba(0,255,255,0.2); color: white;
+      border: 2px solid #00ffcc; border-radius: 8px; font-weight: bold;
+      cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; gap: 6px;
     }
-    #search-btn:hover, #next-btn:hover { background: rgba(255,255,255,0.4); }
+    #search-btn:hover, #next-btn:hover {
+      background: #00ffcc; color: #000; transform: translateY(-1px);
+    }
 
     /* Toggle Button */
     #toggle-modal {
       position: fixed; top: 20px; left: 20px; z-index: 11;
-      width: 50px; height: 50px; background: rgba(255,255,255,0.2);
-      border: 2px solid #fff; border-radius: 50%; color: white;
-      font-size: 24px; line-height: 46px; text-align: center;
-      cursor: pointer; backdrop-filter: blur(4px);
-      transition: all 0.3s ease;
+      width: 50px; height: 50px; background: rgba(0,255,255,0.2);
+      border: 2px solid #00ffcc; border-radius: 50%; color: white;
+      font-size: 22px; line-height: 46px; text-align: center;
+      cursor: pointer; backdrop-filter: blur(6px);
+      transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(0,0,0,0.4);
     }
-    #toggle-modal:hover { background: rgba(255,255,255,0.4); transform: scale(1.1); }
+    #toggle-modal:hover {
+      background: #00ffcc; color: #000; transform: scale(1.15) rotate(90deg);
+    }
   </style>
 </head>
 <body>
@@ -59,13 +80,16 @@
   </div>
 
   <!-- TOGGLE BUTTON -->
-  <div id="toggle-modal" title="Show Controls">Gear</div>
+  <div id="toggle-modal" title="Toggle Controls"><i class="fas fa-cog"></i></div>
 
-  <!-- MODAL (hidden by default) -->
+  <!-- MODAL -->
   <div id="modal" class="hidden">
-    <input id="search-input" type="text" placeholder="Search (e.g. cyberpunk)" />
-    <button id="search-btn">Search</button>
-    <button id="next-btn">Next Video</button>
+    <div id="search-container">
+      <i class="fas fa-search"></i>
+      <input id="search-input" type="text" placeholder="Search videos..." />
+    </div>
+    <button id="search-btn"><i class="fas fa-search"></i> Search</button>
+    <button id="next-btn"><i class="fas fa-step-forward"></i> Next</button>
   </div>
 
   <script>
@@ -81,7 +105,6 @@
     let usedVideos = new Set();
     let currentQuery = 'glitch';
 
-    // Fetch videos
     async function fetchVideoBatch() {
       const query = currentQuery.trim() || 'glitch';
       try {
@@ -124,7 +147,6 @@
       VIDEO_ELEMENT.play().catch(() => {});
     }
 
-    // Search
     function performSearch() {
       const input = SEARCH_INPUT.value.trim();
       currentQuery = input || 'glitch';
@@ -138,17 +160,15 @@
       if (e.key === 'Enter') performSearch();
     });
 
-    // Modal toggle
+    // Toggle modal with animation
     TOGGLE.addEventListener('click', () => {
-      MODAL.classList.toggle('hidden');
-      TOGGLE.textContent = MODAL.classList.contains('hidden') ? 'Gear' : 'Times';
+      const isHidden = MODAL.classList.toggle('hidden');
+      TOGGLE.innerHTML = isHidden ? '<i class="fas fa-cog"></i>' : '<i class="fas fa-times"></i>';
     });
 
-    // Auto-cycle + next
     VIDEO_ELEMENT.addEventListener('ended', loadNextVideo);
     NEXT_BTN.addEventListener('click', loadNextVideo);
 
-    // Start
     loadNextVideo();
   </script>
 </body>
