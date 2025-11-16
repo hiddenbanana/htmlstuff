@@ -2,45 +2,36 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Glitch Video Background + Centered Logo (Auto-Cycle)</title>
+  <title>Glitch Video Background + Search</title>
   <style>
-    body, html { margin:0; padding:0; height:100%; overflow:hidden; }
+    body, html { margin:0; padding:0; height:100%; overflow:hidden; font-family: sans-serif; }
     #bg-video {
-      position: fixed;
-      top: 50%; left: 50%;
-      min-width: 100%; min-height: 100%;
-      width: auto; height: auto;
-      transform: translate(-50%, -50%);
-      z-index: -1;
-      object-fit: cover;
+      position: fixed; top: 50%; left: 50%; min-width: 100%; min-height: 100%;
+      width: auto; height: auto; transform: translate(-50%, -50%);
+      z-index: -1; object-fit: cover;
     }
     #logo-container {
-      position: fixed;
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      z-index: 1;
-      pointer-events: none;
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      z-index: 1; pointer-events: none;
     }
     #logo {
-      max-width: 600px;   /* ← CHANGED: was 300px → now 2x bigger */
-      width: 100%;
-      height: auto;
-      filter: drop-shadow(0 0 12px rgba(0,0,0,0.7)); /* optional: adds glow */
+      max-width: 600px; width: 100%; height: auto;
+      filter: drop-shadow(0 0 12px rgba(0,0,0,0.7));
     }
-    #new-video {
-      position: fixed;
-      bottom: 20px; right: 20px;
-      z-index: 2;
-      padding: 10px 18px;
-      font-family: sans-serif;
-      font-weight: bold;
-      background: rgba(0,0,0,0.5);
-      color: white;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
+    #controls {
+      position: fixed; top: 20px; left: 20px; z-index: 2;
+      display: flex; gap: 10px; align-items: center;
     }
-    #new-video:hover { background: rgba(0,0,0,0.7); }
+    #search-input {
+      padding: 10px; font-size: 16px; border: 2px solid #fff; border-radius: 6px;
+      background: rgba(0,0,0,0.6); color: white; width: 200px;
+    }
+    #search-btn, #next-btn {
+      padding: 10px 16px; background: rgba(255,255,255,0.2); color: white;
+      border: 2px solid #fff; border-radius: 6px; font-weight: bold; cursor: pointer;
+    }
+    #search-btn:hover, #next-btn:hover { background: rgba(255,255,255,0.4); }
+    #next-btn { position: fixed; bottom: 20px; right: 20px; }
   </style>
 </head>
 <body>
@@ -51,21 +42,32 @@
     <img id="logo" src="https://github.com/hiddenbanana/htmlstuff/blob/main/GIMX-LOGO-white.png?raw=true" alt="Logo">
   </div>
 
-  <button id="new-video">Next Video</button>
+  <!-- SEARCH BAR -->
+  <div id="controls">
+    <input id="search-input" type="text" placeholder="Search videos (e.g. cyberpunk)" />
+    <button id="search-btn">Search</button>
+  </div>
+
+  <!-- NEXT VIDEO BUTTON -->
+  <button id="next-btn">Next Video</button>
 
   <script>
     const API_KEY = 'ZF8qy3fNZlH3TCELlBKW9uK3fnFDZsvk6ZozOgXiGvIARDWd6q1EL4ha';
-    const SEARCH_QUERY = 'glitch';
     const VIDEO_ELEMENT = document.getElementById('bg-video');
-    const NEW_BTN = document.getElementById('new-video');
+    const SEARCH_INPUT = document.getElementById('search-input');
+    const SEARCH_BTN = document.getElementById('search-btn');
+    const NEXT_BTN = document.getElementById('next-btn');
 
     let videoCache = [];
     let usedVideos = new Set();
+    let currentQuery = 'glitch'; // default
 
+    // Fetch videos for current query
     async function fetchVideoBatch() {
+      const query = currentQuery.trim() || 'glitch';
       try {
         const resp = await fetch(
-          `https://api.pexels.com/videos/search?query=${SEARCH_QUERY}&per_page=30`,
+          `https://api.pexels.com/videos/search?query=${encodeURIComponent(query)}&per_page=30`,
           { headers: { Authorization: API_KEY } }
         );
         if (!resp.ok) throw new Error(`Pexels error: ${resp.status}`);
@@ -81,9 +83,11 @@
       const available = videoCache.filter(v => !usedVideos.has(v.id));
       if (available.length === 0) {
         usedVideos.clear();
-        return getRandomVideo();
+        if (videoCache.length === 0) return null;
       }
-      const vid = available[Math.floor(Math.random() * available.length)];
+      const vid = available.length 
+        ? available[Math.floor(Math.random() * available.length)]
+        : videoCache[Math.floor(Math.random() * videoCache.length)];
       usedVideos.add(vid.id);
       return vid;
     }
@@ -93,26 +97,39 @@
         const newBatch = await fetchVideoBatch();
         videoCache.push(...newBatch);
       }
-
       const vid = getRandomVideo();
       if (!vid) {
         console.error("No video available");
         return;
       }
-
       const file = vid.video_files.slice(-1)[0].link;
       VIDEO_ELEMENT.src = file;
       VIDEO_ELEMENT.load();
       VIDEO_ELEMENT.play().catch(() => {});
     }
 
+    // SEARCH: Update query and reload videos
+    function performSearch() {
+      const input = SEARCH_INPUT.value.trim();
+      currentQuery = input || 'glitch';
+      videoCache = [];     // clear old results
+      usedVideos.clear();
+      loadNextVideo();     // start fresh
+    }
+
+    SEARCH_BTN.addEventListener('click', performSearch);
+    SEARCH_INPUT.addEventListener('keypress', e => {
+      if (e.key === 'Enter') performSearch();
+    });
+
+    // Auto-cycle + next button
     VIDEO_ELEMENT.addEventListener('ended', loadNextVideo);
-    NEW_BTN.addEventListener('click', loadNextVideo);
+    NEXT_BTN.addEventListener('click', loadNextVideo);
+
+    // Start with default "glitch"
     loadNextVideo();
   </script>
 
-  <noscript>
-    <p>JavaScript is required to load videos.</p>
-  </noscript>
+  <noscript><p>JavaScript is required.</p></noscript>
 </body>
 </html>
